@@ -166,9 +166,9 @@ def _burn_captions(video_path: str, segments: List[Dict], clip_start: float,
     blocks = []
     for index, (start, end, text) in enumerate(entries, 1):
         safe_text = text.replace("-->", "→").replace("\\", "")
-        blocks.append(f"{index}\\n{_srt_time(start)} --> {_srt_time(end)}\\n{safe_text}")
+        blocks.append(f"{index}\n{_srt_time(start)} --> {_srt_time(end)}\n{safe_text}")
     with open(srt_path, "w", encoding="utf-8") as handle:
-        handle.write("\\n\\n".join(blocks) + "\\n")
+        handle.write("\n\n".join(blocks) + "\n")
 
     # Use FFmpeg's subtitles filter for readable, centered, high-contrast captions.
     escaped = srt_path.replace("\\\\", "/").replace(":", "\\:").replace("'", "\\'")
