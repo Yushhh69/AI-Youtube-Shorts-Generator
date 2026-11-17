@@ -46,6 +46,19 @@ def generate(url, count, quality, aspect):
     if count < 1 or count > MAX_CLIPS:
         raise gr.Error("Choose between 1 and 5 clips.")
 
+    try:
+        import yt_dlp
+        opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url.strip(), download=False)
+        duration = float(info.get("duration") or 0)
+        if duration and duration > MAX_SOURCE_MINUTES * 60:
+            raise gr.Error("For this free-tier test, the source must be 30 minutes or shorter.")
+    except gr.Error:
+        raise
+    except Exception as exc:
+        raise gr.Error("Could not inspect this YouTube video: {}. It may be private or blocked.".format(str(exc)[:220]))
+
     cleanup_old_jobs()
     job_dir = OUTPUT_ROOT / uuid.uuid4().hex
     job_dir.mkdir(parents=True, exist_ok=True)
