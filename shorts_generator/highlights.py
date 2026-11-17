@@ -14,7 +14,6 @@ import json
 import re
 from typing import Callable, Dict, List, Optional
 
-from . import muapi
 
 
 LLMFn = Callable[[str], str]
@@ -70,6 +69,7 @@ MAX_HIGHLIGHT_API_ATTEMPTS = 3
 
 def call_muapi_llm(prompt: str) -> str:
     """Default LLM backend: MuAPI gpt-5-mini."""
+    from . import muapi
     result = muapi.run(
         "gpt-5-mini",
         {"prompt": prompt},
@@ -160,10 +160,13 @@ def _sanitize_highlights(raw_highlights: object, duration: float) -> List[Dict]:
     return cleaned
 
 
-def detect_content_type(transcript: Dict, llm_fn: LLMFn = call_muapi_llm) -> Dict[str, str]:
+def detect_content_type(transcript: Dict, llm_fn: Optional[LLMFn] = None) -> Dict[str, str]:
     segments = transcript.get("segments", [])
     sample = " ".join(s["text"] for s in segments[:25])[:3000]
     prompt = f"{CONTENT_TYPE_PROMPT}\n\nTranscript sample:\n{sample}"
+    if llm_fn is None:
+        from .local.llm import call_local_llm
+        llm_fn = call_local_llm
     try:
         raw = llm_fn(prompt)
         return _parse_json_loose(raw)
@@ -279,7 +282,9 @@ def get_highlights(
     `llm_fn` swaps the underlying LLM. Defaults to MuAPI gpt-5-mini; local
     mode passes in a local LLM-backed callable.
     """
-    llm_fn = llm_fn or call_muapi_llm
+    if llm_fn is None:
+        from .local.llm import call_local_llm
+        llm_fn = call_local_llm
     duration = transcript.get("duration", 0)
     content_info = detect_content_type(transcript, llm_fn=llm_fn)
     print(f"[highlights] content={content_info.get('content_type')} density={content_info.get('density')} duration={duration:.0f}s", flush=True)
