@@ -163,7 +163,7 @@ def _highlights(prompt: str) -> Dict[str, List[Dict]]:
 def call_local_llm(prompt: str) -> str:
     """Compatibility function for the existing pipeline; uses local heuristics."""
     lower = prompt.lower()
-    if "classify this video transcript sample" in lower or "classify the video transcript sample" in lower:
+    if "transcript sample:" in lower and "content type" in lower:
         result = _classify(prompt)
     else:
         result = _highlights(prompt)
