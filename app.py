@@ -14,6 +14,14 @@ os.environ["LOCAL_WHISPER_DEVICE"] = "cpu"
 os.environ["LOCAL_OUTPUT_DIR"] = "/tmp/shorts-jobs"
 
 import gradio as gr
+import spaces
+
+
+@spaces.GPU
+def zerogpu_compatibility_check():
+    # The video pipeline itself stays CPU-based; this tiny decorated function
+    # exists only to satisfy Hugging Face ZeroGPU Space startup requirements.
+    return True
 
 MAX_SOURCE_MINUTES = 30
 MAX_CLIPS = 5
