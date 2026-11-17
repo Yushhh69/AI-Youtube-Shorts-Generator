@@ -139,18 +139,70 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
     return out_path
 
 
+def _srt_time(seconds: float) -> str:
+    total_ms = max(0, int(round(seconds * 1000)))
+    hours, rem = divmod(total_ms, 3600000)
+    minutes, rem = divmod(rem, 60000)
+    secs, millis = divmod(rem, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def _burn_captions(video_path: str, segments: List[Dict], clip_start: float,
+                   clip_end: float, out_path: str) -> str:
+    """Burn Whisper transcript captions into the rendered clip."""
+    entries = []
+    for segment in segments:
+        start = max(clip_start, float(segment.get("start", 0)))
+        end = min(clip_end, float(segment.get("end", 0)))
+        text = str(segment.get("text", "")).strip()
+        if not text or end <= start:
+            continue
+        entries.append((start - clip_start, end - clip_start, text))
+    if not entries:
+        return video_path
+
+    srt_path = out_path + ".srt"
+    temp_path = out_path + ".captioned.mp4"
+    blocks = []
+    for index, (start, end, text) in enumerate(entries, 1):
+        safe_text = text.replace("-->", "→").replace("\\", "")
+        blocks.append(f"{index}\\n{_srt_time(start)} --> {_srt_time(end)}\\n{safe_text}")
+    with open(srt_path, "w", encoding="utf-8") as handle:
+        handle.write("\\n\\n".join(blocks) + "\\n")
+
+    # Use FFmpeg's subtitles filter for readable, centered, high-contrast captions.
+    escaped = srt_path.replace("\\\\", "/").replace(":", "\\:").replace("'", "\\'")
+    vf = "subtitles='{}':force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=48'".format(escaped)
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error", "-i", video_path,
+            "-vf", vf, "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "22", "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart", temp_path,
+        ], check=True)
+        os.replace(temp_path, out_path)
+        return out_path
+    finally:
+        for path in (srt_path, temp_path):
+            if os.path.exists(path):
+                os.remove(path)
+
+
 def crop_clip_local(
     source_path: str,
     start_time: float,
     end_time: float,
     aspect_ratio: str,
     out_path: str,
+    transcript_segments: Optional[List[Dict]] = None,
 ) -> str:
-    """Cut + reframe one highlight, returning the local mp4 path."""
+    """Cut, reframe and caption one highlight, returning the local mp4 path."""
     cut_path = out_path + ".cut.mp4"
     try:
         _cut_subclip(source_path, start_time, end_time, cut_path)
         _reframe_vertical(cut_path, out_path, aspect_ratio)
+        if transcript_segments:
+            _burn_captions(out_path, transcript_segments, start_time, end_time, out_path)
     finally:
         if os.path.exists(cut_path):
             os.remove(cut_path)
@@ -162,6 +214,7 @@ def crop_highlights_local(
     highlights: List[Dict],
     aspect_ratio: str = "9:16",
     out_dir: Optional[str] = None,
+    transcript_segments: Optional[List[Dict]] = None,
 ) -> List[Dict]:
     out_dir = out_dir or LOCAL_OUTPUT_DIR
     os.makedirs(out_dir, exist_ok=True)
@@ -176,6 +229,7 @@ def crop_highlights_local(
                 float(h["end_time"]),
                 aspect_ratio,
                 out_path,
+                transcript_segments=transcript_segments,
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:
