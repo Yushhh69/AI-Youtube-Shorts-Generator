@@ -118,7 +118,12 @@ def generate(url, uploaded_file, count, quality, aspect):
             if path and os.path.isfile(path):
                 files.append(path)
         if not files:
-            raise gr.Error("No clips were rendered. Try another shorter video.")
+            failures = [
+                "Clip {}: {}".format(index, item.get("error", "unknown rendering error"))
+                for index, item in enumerate(result.get("shorts", []), 1)
+            ]
+            detail = " | ".join(failures)[:900] or "The highlight detector returned no usable clips."
+            raise gr.Error("No clips were rendered. " + detail)
         return files, "Finished. Generated {} clip(s).".format(len(files))
     except gr.Error:
         raise
