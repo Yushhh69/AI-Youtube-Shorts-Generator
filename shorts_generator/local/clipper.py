@@ -48,6 +48,23 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
         ) from e
 
     target_ratio = _ratio(aspect_ratio)
+    if not hasattr(cv2, "CascadeClassifier"):
+        # Some minimal OpenCV wheels omit Haar cascade support. Fall back to
+        # a centered FFmpeg crop so clip rendering still works reliably.
+        ratio = target_ratio
+        crop = (
+            "crop=w='if(gt(iw/ih,{r}),ih*{r},iw)':"
+            "h='if(gt(iw/ih,{r}),ih,iw/{r})':"
+            "x='(iw-ow)/2':y='(ih-oh)/2'"
+        ).format(r=ratio)
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error", "-i", in_path,
+            "-vf", crop, "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "22", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+            out_path,
+        ], check=True)
+        return out_path
+
     cap = cv2.VideoCapture(in_path)
     if not cap.isOpened():
         raise RuntimeError(f"could not open {in_path}")
